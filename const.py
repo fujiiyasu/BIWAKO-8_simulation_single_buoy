@@ -7,12 +7,12 @@ class parameter:
 		self.V = 12.0
 
 		# ROBOT CONTROL PARAMETER
-		self.distance_Kp = 3.5 # 3.5
-		self.distance_Kd = 0.1 # 0.1
-		self.degree_Kp = 0.5
-		self.degree_Kd = 80
-		self.KEEP_MAX_THRUST = 10.0*(math.sqrt(2.0)/2)
+		self.distance_Kp = 2.0
+		self.distance_Kd = 3.0
+		self.bearing_Kp = 0.5
+		self.bearing_Kd = 2.3
 		self.STRAGHT_MAX_THRUST = 12.0
+		self.KEEP_MAX_THRUST = 10.0*(math.sqrt(2.0)/2)
 		self.TIME_STEP = 100
 
 		# WAY POINT
@@ -29,8 +29,8 @@ class parameter:
 		# 0: NATURAL DISTURBANCE, 1: RANDOM DISTURBANCE, 2: STEP DISTURBANCE
 
 		# CONTROL MODE
-		self.control_mode = 3
-		# 0:FBLR MODE, 1:DIAGNALCONTROL MODE, 2:FIXED HEAD CONTROL MODE , 3: OCT-DIRECTIONAL
+		self.mode = 0
+		# 0:直進モード, 1:カタマランモード，2: キープモード
 
 		# CONTROL STRATEGY
 		self.policy = 0

@@ -129,6 +129,18 @@ class BIWAKO_8:
         except Exception as e:
             print(f"An error occurred: {e}")
 
+    # ロボットの変形関数
+    def transform_robot(self, mode):
+        # 0: 直進モード, 1: カタマランモード, 2: キープモード
+        if mode == 0:
+            self.set_straight_mode()
+        elif mode == 1:
+            self.set_catamaran_mode()
+        elif mode == 2:
+            self.set_keeping_mode()
+        else:
+            print("Invalid mode")
+    
     # ストレートモードへ変形
     def set_straight_mode(self):
         link_angle = math.pi/2
@@ -145,6 +157,7 @@ class BIWAKO_8:
         self.thruster_joint3.setPosition(thruster_angle)
         self.thruster_joint4.setPosition(-thruster_angle)
 
+    # カタマランモードへの変形
     def set_catamaran_mode(self):
         link_angle = math.pi/4
         thruster_angle = math.pi/2
@@ -162,17 +175,20 @@ class BIWAKO_8:
 
     # キープモードへ変形
     def set_keeping_mode(self):
+        link_angle = 0.0
+        thruster_angle = 0.0
         # リンク関節の制御
-        self.link_joint1.setPosition(0.0)
-        self.link_joint2.setPosition(0.0)
-        self.link_joint3.setPosition(0.0)
-        self.link_joint4.setPosition(0.0)
+        self.link_joint1.setPosition(link_angle)
+        self.link_joint2.setPosition(link_angle)
+        self.link_joint3.setPosition(link_angle)
+        self.link_joint4.setPosition(link_angle)
 
         # スラスタ関節の制御
-        self.thruster_joint1.setPosition(0.0)
-        self.thruster_joint2.setPosition(0.0)
-        self.thruster_joint3.setPosition(0.0)
-        self.thruster_joint4.setPosition(0.0)
+        self.thruster_joint1.setPosition(thruster_angle)
+        self.thruster_joint2.setPosition(thruster_angle)
+        self.thruster_joint3.setPosition(thruster_angle)
+        self.thruster_joint4.setPosition(thruster_angle)
+
     
     # スラスタの速度を設定
     def set_thruster_velocity(self, thruster_direction, thrust):
@@ -250,8 +266,8 @@ class BIWAKO_8:
         def PD_distance_control(prev_distance, curr_distance):
             distance_diff = curr_distance - prev_distance
             control_output = 0.0
-            K_p = 2.0
-            K_d = 3.0
+            K_p = parameter.distance_Kp
+            K_d = parameter.distance_Kd
 
             # 距離差によるPD制御
             control_output = K_p * curr_distance - K_d * distance_diff
@@ -262,8 +278,8 @@ class BIWAKO_8:
         def control_heading(angle, preve_angle, curr_angle):
             angle_diff = curr_angle - prev_angle
             control_output = 0.0
-            K_p = 0.5
-            K_d = 2.3
+            K_p = parameter.bearing_Kp
+            K_d = parameter.bearing_Kd
 
             if 0 <= angle < 90:
                 angle = abs(angle - 180)
@@ -379,10 +395,6 @@ class BIWAKO_8:
     def get_BIWAKO_8_state(self):
         state = [self.get_gps_noise, self.get_gps_value(), self.get_compass_value(), self.get_ampere(), self.get_power(), self.get_waypoint(), self.get_waypoint_num()]
         return state
-    
-    # モードの設定
-    def set_mode(self, mode):
-        self.mode = mode
 
 # ==========以下，シミュレータメイン関数==========
 
@@ -393,9 +405,10 @@ biwako_8 = BIWAKO_8()
 biwako_8.load_waypoints_from_csv(parameter.way_point_file)
 # BIWAKO-8の初期化
 biwako_8.init_device()
+
 # 直進モードへ変形
-biwako_8.set_straight_mode()
-# biwako_8.set_catamaran_mode()
+mode = parameter.mode
+biwako_8.transform_robot(mode) # 0: 直進モード, 1: カタマランモード, 2: キープモード
 
 # 環境の初期化
 TIME_STEP = 100
