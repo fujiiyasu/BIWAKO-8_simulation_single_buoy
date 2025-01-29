@@ -171,4 +171,4 @@ cython_debug/
 .pypirc
 
 # ignore const.py
-const.py
+/const.py
