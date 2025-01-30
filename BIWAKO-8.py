@@ -263,11 +263,11 @@ class BIWAKO_8:
     # ひとまず直進モードの制御関数のみを定義
     def straight_control(self, prev_distance, curr_distance, prev_angle, curr_angle):
         # PD制御による距離制御
-        def PD_distance_control(prev_distance, curr_distance):
-            distance_diff = curr_distance - prev_distance
-            control_output = 0.0
-            K_p = parameter.distance_Kp
-            K_d = parameter.distance_Kd
+    def PD_distance_control(self, prev_distance, curr_distance):
+        distance_diff = curr_distance - prev_distance
+        control_output = 0.0
+        K_p = parameter.distance_Kp
+        K_d = parameter.distance_Kd
 
             # 距離差によるPD制御
             control_output = K_p * curr_distance - K_d * distance_diff
