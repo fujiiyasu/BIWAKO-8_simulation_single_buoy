@@ -260,61 +260,56 @@ class BIWAKO_8:
 
         return diff_angle
 
-    # ひとまず直進モードの制御関数のみを定義
-    def straight_control(self, prev_distance, curr_distance, prev_angle, curr_angle):
-        # PD制御による距離制御
+    # PD制御による距離制御
     def PD_distance_control(self, prev_distance, curr_distance):
         distance_diff = curr_distance - prev_distance
         control_output = 0.0
         K_p = parameter.distance_Kp
         K_d = parameter.distance_Kd
 
-            # 距離差によるPD制御
-            control_output = K_p * curr_distance - K_d * distance_diff
-            thrust = max(min(control_output, self.STRAIGHT_MAX_THRUST), 0)
-            print("thrust:", thrust)
-            return thrust
-        
-        def control_heading(angle, preve_angle, curr_angle):
+        # 距離差によるPD制御
+        control_output = K_p * curr_distance - K_d * distance_diff
+        thrust = max(min(control_output, self.STRAIGHT_MAX_THRUST), 0)
+        print("thrust:", thrust)
+        return thrust
+    
+    # ひとまず直進モードの制御関数のみを定義
+    def straight_control(self, prev_distance, curr_distance, prev_angle, curr_angle):
+        def control_heading(preve_angle, curr_angle):
             angle_diff = curr_angle - prev_angle
             control_output = 0.0
             K_p = parameter.bearing_Kp
             K_d = parameter.bearing_Kd
 
-            if 0 <= angle < 90:
-                angle = abs(angle - 180)
-            elif -180 <= angle < -90:
-                angle = abs(angle + 180)
-            elif -90 <= angle < 0:
-                angle = abs(angle)
+            if 0 <= curr_angle < 90:
+                curr_angle = abs(curr_angle - 180)
+            elif -180 <= curr_angle < -90:
+                curr_angle = abs(curr_angle + 180)
+            elif -90 <= curr_angle < 0:
+                curr_angle = abs(curr_angle)
 
             # 方位差によるPD制御
-            control_output = K_p * angle - K_d * angle_diff
+            control_output = K_p * curr_angle - K_d * angle_diff
             balance = max(min(1 - (2 * (control_output / 90)), 1), -1)
             return balance
 
         thruster_directions = [1, 1, 1, 1]
 
-        t = control_heading(curr_angle, prev_angle, curr_angle)
+        t = control_heading(prev_angle, curr_angle)
         if t <= 0.5:
             t = 0.5
-        """
         # 頭側だけで操舵
         if 0 <= curr_angle < 90:
             print("Forward Counter-Clockwise")
-            t = control_heading(curr_angle, angle_diff)
             thruster_directions = [1, -t, -1, 1]
         elif 90 <= curr_angle < 180:
             print("Backward Clockwise")
-            t = control_heading(curr_angle, angle_diff)
             thruster_directions = [1, -1, -t, 1]
         elif -180 <= curr_angle < -90:
             print("Backward Counter-Clockwise")
-            t = control_heading(curr_angle, angle_diff)
             thruster_directions = [1, -1, -1, t]
         elif -90 <= curr_angle < 0:
             print("Forward Clockwise")
-            t = control_heading(curr_angle, angle_diff)
             thruster_directions = [t, -1, -1, 1]
         """
         # 頭側と尾側の両方で操舵
@@ -330,10 +325,29 @@ class BIWAKO_8:
         elif -90 <= curr_angle < 0:
             print("Forward Clockwise")
             thruster_directions = [t, -1, -1, t]
+        """
 
-        # ひとまず距離によるスラスタの強度決定はせず，常に最大スラスタを出力
-        # -> スラスタの強度が強いと小回りが利かないため，目標値に近づくにつれてスラスタの強度を小さくする制御変更する必要ありかもしれない
-        thrust = PD_distance_control(prev_distance, curr_distance)
+        thrust = self.PD_distance_control(prev_distance, curr_distance)
+        # thrust = self.STRAIGHT_MAX_THRUST
+
+        return thruster_directions, thrust
+
+    def keep_control(self, prev_distance, curr_distance, curr_angle):
+        thruster_directions = [1, 1, 1, 1]
+        # 頭側だけで操舵
+        if 0 <= curr_angle < 90:
+            print("Forward Counter-Clockwise")
+            thruster_directions = [1, -1, -1, 1]
+        elif 90 <= curr_angle < 180:
+            print("Backward Clockwise")
+            thruster_directions = [1, -1, -1, 1]
+        elif -180 <= curr_angle < -90:
+            print("Backward Counter-Clockwise")
+            thruster_directions = [1, -1, -1, 1]
+        elif -90 <= curr_angle < 0:
+            print("Forward Clockwise")
+            thruster_directions = [1, -1, -1, 1]
+        thrust = self.PD_distance_control(prev_distance, curr_distance)
         # thrust = self.STRAIGHT_MAX_THRUST
 
         return thruster_directions, thrust
@@ -472,10 +486,13 @@ if __name__ == "__main__":
                 break
         else:
         #   - 目標に向かって移動する制御を実行
-            thruster_direction, thrust = biwako_8.straight_control(prev_distance,curr_distance, prev_angle, curr_angle)
+            if mode == 0 or mode == 1: 
+                thruster_direction, thrust = biwako_8.straight_control(prev_distance, curr_distance, prev_angle, curr_angle)
+            elif mode == 2:
+                thruster_direction, thrust = biwako_8.keep_control(prev_distance, curr_distance, curr_angle)
+            biwako_8.set_thruster_velocity(thruster_direction, thrust)
             # print("thruster_direction:", thruster_direction)
             # print("thrust:", thrust)
-            biwako_8.set_thruster_velocity(thruster_direction, thrust)
 
         # 8. タイムスタンプの更新
         # - 現在のシミュレーション時間を更新
