@@ -334,19 +334,22 @@ class BIWAKO_8:
 
     def keep_control(self, prev_distance, curr_distance, curr_angle):
         thruster_directions = [1, 1, 1, 1]
-        # 頭側だけで操舵
-        if 0 <= curr_angle < 90:
-            print("Forward Counter-Clockwise")
+        # 前
+        if 180 <= curr_angle < -135 or 135 < curr_angle < 180:
+            print("Forward")
+            thruster_directions = [-1, 1, 1, -1]
+        # 後
+        elif -45 <= curr_angle < 45:
+            print("Backward")
             thruster_directions = [1, -1, -1, 1]
-        elif 90 <= curr_angle < 180:
-            print("Backward Clockwise")
-            thruster_directions = [1, -1, -1, 1]
-        elif -180 <= curr_angle < -90:
-            print("Backward Counter-Clockwise")
-            thruster_directions = [1, -1, -1, 1]
-        elif -90 <= curr_angle < 0:
-            print("Forward Clockwise")
-            thruster_directions = [1, -1, -1, 1]
+        # 左        
+        elif 45 <= curr_angle < 135:
+            print("Left")
+            thruster_directions = [-1, -1, 1, 1]
+        # 右
+        elif -45 <= curr_angle < -135:
+            print("Right")
+            thruster_directions = [1, 1, -1, -1]
         thrust = self.PD_distance_control(prev_distance, curr_distance)
         # thrust = self.STRAIGHT_MAX_THRUST
 
