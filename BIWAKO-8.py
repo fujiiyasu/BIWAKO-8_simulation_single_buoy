@@ -355,7 +355,6 @@ class BIWAKO_8:
 
         return thruster_directions, thrust
 
-
     # 電流計算関数
     def calc_ampere(self, thrust, thruster_direction):
         sum_t_dir = 0.0
