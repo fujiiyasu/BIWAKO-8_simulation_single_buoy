@@ -275,7 +275,7 @@ class BIWAKO_8:
     
     # ひとまず直進モードの制御関数のみを定義
     def straight_control(self, prev_distance, curr_distance, prev_angle, curr_angle):
-        def control_heading(preve_angle, curr_angle):
+        def control_heading(prev_angle, curr_angle):
             angle_diff = curr_angle - prev_angle
             control_output = 0.0
             K_p = parameter.bearing_Kp
@@ -332,8 +332,30 @@ class BIWAKO_8:
 
         return thruster_directions, thrust
 
-    def keep_control(self, prev_distance, curr_distance, curr_angle):
+    def keep_control(self, prev_distance, curr_distance, prev_angle, curr_angle):
         thruster_directions = [1, 1, 1, 1]
+        # 方位差によるPD制御
+        def control_heading(prev_angle, curr_angle):
+            angle_diff = curr_angle - prev_angle
+            control_output = 0.0
+            K_p = parameter.bearing_Kp
+            K_d = parameter.bearing_Kd
+
+            if 0 <= curr_angle < 90:
+                curr_angle = abs(curr_angle - 180)
+            elif -180 <= curr_angle < -90:
+                curr_angle = abs(curr_angle + 180)
+            elif -90 <= curr_angle < 0:
+                curr_angle = abs(curr_angle)
+
+            # 方位差によるPD制御
+            control_output = K_p * curr_angle - K_d * angle_diff
+            balance = max(min(1 - (2 * (control_output / 90)), 1), -1)
+            return balance
+
+        t = control_heading(prev_angle, curr_angle)
+        """
+        # heading controlなし
         # 前
         if 180 <= curr_angle < -135 or 135 < curr_angle < 180:
             print("Forward")
@@ -350,10 +372,37 @@ class BIWAKO_8:
         elif -45 <= curr_angle < -135:
             print("Right")
             thruster_directions = [1, 1, -1, -1]
+        """
+        # heading controlあり
+        if 135 <= curr_angle < 180:
+            print("Forward Clockwise")
+            thruster_directions = [-t, 1, 1, -t]
+        elif -180 <= curr_angle < -135:
+            print("Forward Counter-Clockwise")
+            thruster_directions = [-1, t, t, -1]
+        elif 0 <= curr_angle < 45:
+            print("Backward Clockwise")
+            thruster_directions = [1, -t, -t, 1]
+        elif -45 <= curr_angle < 0:
+            print("Backward Counter-Clockwise")
+            thruster_directions = [t, -1, -1, t]
+        elif 90 <= curr_angle < 135:
+            print("Left Clockwise")
+            thruster_directions = [-t, -t, 1, 1]
+        elif 45 <= curr_angle < 90:
+            print("Left Counter-Clockwise")
+            thruster_directions = [-1, -1, t, t]
+        elif -90 <= curr_angle < -45:
+            print("Right Clockwise")
+            thruster_directions = [1, 1, -t, -t]
+        elif -135 <= curr_angle < -90:
+            print("Right Counter-Clockwise")
+            thruster_directions = [t, t, -1, -1]
         thrust = self.PD_distance_control(prev_distance, curr_distance)
         # thrust = self.STRAIGHT_MAX_THRUST
 
         return thruster_directions, thrust
+
 
     # 電流計算関数
     def calc_ampere(self, thrust, thruster_direction):
@@ -491,7 +540,7 @@ if __name__ == "__main__":
             if mode == 0 or mode == 1: 
                 thruster_direction, thrust = biwako_8.straight_control(prev_distance, curr_distance, prev_angle, curr_angle)
             elif mode == 2:
-                thruster_direction, thrust = biwako_8.keep_control(prev_distance, curr_distance, curr_angle)
+                thruster_direction, thrust = biwako_8.keep_control(prev_distance, curr_distance, prev_angle, curr_angle)
             biwako_8.set_thruster_velocity(thruster_direction, thrust)
             # print("thruster_direction:", thruster_direction)
             # print("thrust:", thrust)
