@@ -172,3 +172,7 @@ cython_debug/
 
 # ignore const.py
 /const.py
+
+# Ignore contents of csv and graph directories
+/csv/*
+/graph/*

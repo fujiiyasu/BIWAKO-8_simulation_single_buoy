@@ -1,5 +1,6 @@
 import csv
 import math
+from datetime import datetime
 from geopy.distance import geodesic
 from controller import Supervisor
 
@@ -63,8 +64,18 @@ class BIWAKO_8:
         self.waypoint_num = 0 # 目標位置の番号
         self.waypoint = [0.0, 0.0] # 目標位置，初期値は[0.0, 0.0]
 
+        # ラップカウント
+        self.lap_count = 0
+        self.max_lap = 5
+
         # モード
         self.mode = 0 # 0: 直進モード, 1: キープモード
+
+        # 追加状態変数
+        self.thrust = 0.0
+        self.thruster_direction = [0.0, 0.0, 0.0, 0.0]
+        self.distance = 0.0
+        self.angle = 0.0
     
     def init_device(self):
         # リンク関節の設定
@@ -199,13 +210,23 @@ class BIWAKO_8:
             i += 1
     
     # ロボットの状態を更新
-    def update_robot_state(self, thrust, thruster_direction):
+    def update_robot_state(self, thrust, thruster_direction, distance=None, angle=None):
+        # センサー値の更新
         self.update_gps_noise()
         self.update_robot_position()
         self.update_compass_value()
         self.update_ampere(thrust, thruster_direction)
         self.update_power()
         self.update_speed()
+
+        # ログ用変数の更新
+        self.update_thrust(thrust)
+        self.update_thruster_direction(thruster_direction)
+
+        if distance is not None:
+            self.update_distance(distance)
+        if angle is not None:
+            self.update_angle(angle)
 
     # ノイズありのGPS値を更新
     def update_gps_noise(self):
@@ -221,6 +242,18 @@ class BIWAKO_8:
     def update_compass_value(self):
         self.compass_value = self.compass.getValues()
     
+    def update_thrust(self, value):
+        self.thrust = value
+
+    def update_thruster_direction(self, direction_list):
+        self.thruster_direction = direction_list
+
+    def update_distance(self, value):
+        self.distance = value
+
+    def update_angle(self, value):
+        self.angle = value
+
     def calc_distance(self, gps_value):
         try:
             current_position = [gps_value[0], gps_value[1]]
@@ -448,6 +481,18 @@ class BIWAKO_8:
     def get_waypoint_num(self):
         return self.waypoint_num
 
+    def get_thrust(self):
+        return self.thrust
+
+    def get_thruster_direction(self):
+        return self.thruster_direction
+
+    def get_distance(self):
+        return self.distance
+
+    def get_angle(self):
+        return self.angle
+
     def update_waypoint(self):
         self.waypoint = self.waypoint_list[self.waypoint_num]
 
@@ -455,13 +500,60 @@ class BIWAKO_8:
         if self.waypoint_num < len(self.waypoint_list) - 1:
             self.waypoint_num += 1
         else:
-            self.waypoint_num = -1
-    
-    def get_BIWAKO_8_state(self):
-        state = [self.get_gps_noise, self.get_gps_value(), self.get_compass_value(), self.get_ampere(), self.get_power(), self.get_waypoint(), self.get_waypoint_num()]
+            self.lap_count += 1
+            if self.lap_count >= self.max_lap:
+                self.waypoint_num = -1
+            else:
+                self.waypoint_num = 0
+        
+    def get_BIWAKO_8_state(self, time_s):
+        state = [
+            time_s,
+            *self.get_gps_noise(),       # ノイズありGPS (lat, lon)
+            *self.get_gps_value(),       # ノイズなしGPS (lat, lon)
+            *self.get_compass_value(),   # コンパス (north, east, down)
+            self.get_ampere(),           # 電流[A]
+            self.get_power(),            # 電力[W]
+            self.get_waypoint()[0],      # 目標WP緯度
+            self.get_waypoint()[1],      # 目標WP経度
+            self.get_waypoint_num(),     # WP番号
+            self.get_thrust(),           # 推力
+            self.get_thruster_direction()[0],
+            self.get_thruster_direction()[1],
+            self.get_thruster_direction()[2],
+            self.get_thruster_direction()[3],
+            self.get_distance(),         # 目標までの距離[m]
+            self.get_angle(),            # 方位差[deg]
+            self.get_speed()             # 実速度[m/s]
+        ]
         return state
 
+
+    def save_log(self, filename, log_data):
+        header = [
+            "time_s", "gps_noise_lat", "gps_noise_lon",
+            "gps_lat", "gps_lon",
+            "compass_north", "compass_east", "compass_down",
+            "ampere_A", "power_W",
+            "waypoint_lat", "waypoint_lon", "waypoint_num",
+            "thrust",
+            "thruster_dir_1", "thruster_dir_2", "thruster_dir_3", "thruster_dir_4",
+            "distance_m", "angle_deg", "speed_mps"
+        ]
+        with open(filename, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(header)
+            writer.writerows(log_data)
+
 # ==========以下，シミュレータメイン関数==========
+# 任意のゲインに上書きする関数（メインルーチン内で呼び出す）　ゲイン調整実験用
+def set_PD_gains(Kp_bear, Kd_bear):
+    parameter.bearing_Kp = Kp_bear
+    parameter.bearing_Kd = Kd_bear
+
+bearing_Kp_list = [0.1, 0.2, 0.3, 0.4, 0.5]
+bearing_Kd_list = [0.5, 1.0, 1.5, 2.0, 2.5]
+
 
 # ロボットのインスタンスを作成
 biwako_8 = BIWAKO_8()
@@ -496,55 +588,88 @@ prev_angle = 0.0
 curr_angle = 0.0
 
 if __name__ == "__main__":
-    while supervisor.step(TIME_STEP) != -1:
-        # 0. BIWAKO-8の状態を更新
-        biwako_8.update_robot_state(thrust, thruster_direction)
+    for kp in bearing_Kp_list:
+        for kd in bearing_Kd_list:
+            # ログファイル名をユニークに（例: log_Kp1.0_Kd0.5.csv）
+            now = datetime.now()
+            filename = now.strftime(f"%Y%m%d_%H%M%S_Kp{kp}_Kd{kd}.csv")
 
-        print("speed:", biwako_8.get_speed())
-        # - BIWAKO-8の状態のログをとる
-        biwako_8_state = biwako_8.get_BIWAKO_8_state()
-        # - ログデータに追加
-        log_data.append(biwako_8_state)
+            # ゲインを設定
+            set_PD_gains(Kp_bear=kp, Kd_bear=kd)
 
-        # 1. センサー値の取得
-        # - GPS値を取得（現在位置計算用）
-        gps_noise_value = biwako_8.get_gps_noise()
-        # - 補助GPS値を取得
-        gps_value = biwako_8.get_gps_value()
-        # - コンパス値を取得（現在の方位を計算用）
-        compass_value = biwako_8.get_compass_value()
+            # BIWAKO_8初期化とシミュレーションのリセット（必要）
+            # WebotsのSupervisorからロボットを再配置する処理があれば追加
 
-        # 2. 距離と角度の計算
-        # - 現在位置と目標位置間の距離を計算
-        prev_distance = curr_distance
-        curr_distance = biwako_8.calc_distance(gps_noise_value)
-        # print("distance:", distance)
-        # - 現在の向きと目標位置の方位差を計算
-        prev_angle = curr_angle
-        curr_angle = biwako_8.calc_angle(compass_value, gps_value, biwako_8.get_waypoint())
+            # 実験用周回数の設定
+            biwako_8.max_lap = 3  # <- 3周に変更
+            biwako_8.lap_count = 0
 
-        # 3. 行動の判断
-        # - 目標位置に到達した場合
-        if curr_distance < parameter.main_distance_tolerance:
-            # - 次の目標位置に進む
-            biwako_8.update_waypoint_num()
-            biwako_8.update_waypoint()
+            # ログ変数リセット
+            log_data = []
+            timestamp = 0.0
+            thrust = 0.0
+            thruster_direction = [0, 0, 0, 0]
+            prev_distance = 0.0
+            curr_distance = 0.0
+            prev_angle = 0.0
+            curr_angle = 0.0
 
-            # - すべての目標に到達したら終了処理を実行
-            if biwako_8.get_waypoint_num() == -1:
-                biwako_8.set_keeping_mode()
-                biwako_8.set_thruster_velocity([0, 0, 0, 0], 0.0)
-                break
-        else:
-        #   - 目標に向かって移動する制御を実行
-            if mode == 0 or mode == 1: 
-                thruster_direction, thrust = biwako_8.straight_control(prev_distance, curr_distance, prev_angle, curr_angle)
-            elif mode == 2:
-                thruster_direction, thrust = biwako_8.keep_control(prev_distance, curr_distance, prev_angle, curr_angle)
-            biwako_8.set_thruster_velocity(thruster_direction, thrust)
-            # print("thruster_direction:", thruster_direction)
-            # print("thrust:", thrust)
+            mode = parameter.mode
+            biwako_8.transform_robot(mode) # 0: 直進モード, 1: カタマランモード, 2: キープモード
 
-        # 8. タイムスタンプの更新
-        # - 現在のシミュレーション時間を更新
-        timestamp += TIME_STEP/1000
+            while supervisor.step(TIME_STEP) != -1:
+                # 0. BIWAKO-8の状態を更新
+                biwako_8.update_robot_state(thrust, thruster_direction, curr_distance, curr_angle)
+
+                print("speed:", biwako_8.get_speed())
+                # - BIWAKO-8の状態のログをとる
+                biwako_8_state = biwako_8.get_BIWAKO_8_state(timestamp)
+                # - ログデータに追加
+                log_data.append(biwako_8_state)
+
+                # 1. センサー値の取得
+                # - GPS値を取得（現在位置計算用）
+                gps_noise_value = biwako_8.get_gps_noise()
+                # - 補助GPS値を取得
+                gps_value = biwako_8.get_gps_value()
+                # - コンパス値を取得（現在の方位を計算用）
+                compass_value = biwako_8.get_compass_value()
+
+                # 2. 距離と角度の計算
+                # - 現在位置と目標位置間の距離を計算
+                prev_distance = curr_distance
+                curr_distance = biwako_8.calc_distance(gps_value) # ノイズありの場合は gps_noise_value を使用
+                # print("distance:", distance)
+                # - 現在の向きと目標位置の方位差を計算
+                prev_angle = curr_angle
+                curr_angle = biwako_8.calc_angle(compass_value, gps_value, biwako_8.get_waypoint())
+
+                # 3. 行動の判断
+                # - 目標位置に到達した場合
+                if curr_distance < parameter.main_distance_tolerance:
+                    # - 次の目標位置に進む
+                    biwako_8.update_waypoint_num()
+                    biwako_8.update_waypoint()
+
+                    # - すべての目標に到達したら終了処理を実行
+                    if biwako_8.get_waypoint_num() == -1:
+                        biwako_8.set_keeping_mode()
+                        biwako_8.set_thruster_velocity([0, 0, 0, 0], 0.0)
+                        break
+                else:
+                #   - 目標に向かって移動する制御を実行
+                    if mode == 0 or mode == 1: 
+                        thruster_direction, thrust = biwako_8.straight_control(prev_distance, curr_distance, prev_angle, curr_angle)
+                    elif mode == 2:
+                        thruster_direction, thrust = biwako_8.keep_control(prev_distance, curr_distance, prev_angle, curr_angle)
+                    biwako_8.set_thruster_velocity(thruster_direction, thrust)
+                    # print("thruster_direction:", thruster_direction)
+                    # print("thrust:", thrust)
+
+                # 8. タイムスタンプの更新
+                # - 現在のシミュレーション時間を更新
+                timestamp += TIME_STEP/1000
+
+            biwako_8.save_log(filename, log_data)
+            print(f"ログを {filename} に保存しました")
+    supervisor.simulationSetMode(Supervisor.SIMULATION_MODE_PAUSE)
