@@ -176,3 +176,4 @@ cython_debug/
 # Ignore contents of csv and graph directories
 /csv/*
 /graph/*
+*.csv
